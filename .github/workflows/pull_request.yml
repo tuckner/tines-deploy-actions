@@ -1,0 +1,75 @@
+name: 'Terraform Validate'
+on:
+  pull_request:
+    paths-ignore:
+      - '.github/**'
+jobs:
+  vm:
+    env:
+      TF_VAR_tines_email: ${{ secrets.TINES_EMAIL }}
+      TF_VAR_tines_token: ${{ secrets.TINES_TOKEN }}
+      TF_VAR_tines_base_url: ${{ secrets.TINES_BASE_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      TERRAFORM_PROVIDER_TINES_VERSION: 0.0.13
+      OS_ARCH: linux_amd64
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repo'
+        uses: actions/checkout@master
+      - name: "Install Go"
+        uses: actions/setup-go@v2
+        with:
+          go-version: '^1.13.1'
+      - uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 0.14.7
+      - name: 'Install terraform-provider-tines'
+        run: |
+          curl -L -o tines-terraform.zip https://github.com/tuckner/terraform-provider-tines/archive/${TERRAFORM_PROVIDER_TINES_VERSION}.tar.gz
+          tar -xzf tines-terraform.zip
+          cd terraform-provider-tines-${TERRAFORM_PROVIDER_TINES_VERSION}
+          go build -o ${GITHUB_WORKSPACE}/terraform-provider-tines
+          mkdir -p ${GITHUB_WORKSPACE}/.terraform.d/plugins/github.com/tuckner/tines/${TERRAFORM_PROVIDER_TINES_VERSION}/${OS_ARCH}/
+          mv ${GITHUB_WORKSPACE}/terraform-provider-tines ${GITHUB_WORKSPACE}/.terraform.d/plugins/github.com/tuckner/tines/${TERRAFORM_PROVIDER_TINES_VERSION}/${OS_ARCH}/
+      - name: 'Execute Terraform Init'
+        id: init
+        run: terraform init -plugin-dir=${GITHUB_WORKSPACE}/.terraform.d/plugins/
+      - name: Terraform Plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -no-color
+        continue-on-error: true
+      - name: Update Pull Request
+        uses: actions/github-script@0.9.0
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            <details>
+              <summary>Show Plan</summary>
+            
+            \`\`\`hcl
+            ${process.env.PLAN}
+            \`\`\`
+            
+            </details>
+
+            **Pusher**: @${{ github.actor }}
+           
+            **Action**: \`${{ github.event_name }}\``;
+
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
