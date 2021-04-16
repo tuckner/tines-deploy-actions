@@ -7,6 +7,6 @@ Create Github secrets for the following:
 + TINES_EMAIL
 + TINES_TOKEN
 
-Additionally, to use an S3 backend:
+Additionally, to use an S3 backend (strongly recommended):
 + AWS_ACCESS_KEY_ID
 + AWS_SECRET_ACCESS_KEY
