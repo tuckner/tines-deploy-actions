@@ -26,7 +26,7 @@ resource "tines_story" "story1" {
 
 resource "tines_note" "note1" {
     story_id = tines_story.story1.id
-    content = "This was created by Terraform!"
+    content = "This was created by Terraform!!!"
     position = {
       x = 105.0
       y = 100.0
